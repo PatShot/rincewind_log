@@ -21,8 +21,15 @@ type Session struct {
 	// but cannot be without a Subject
 	Subject string `toml:"subject"`
 
+	// SubjectID helps with searching through Database.
+	SubjectID string `toml:"subject_id, omitempty"`
+
 	// Meta is the single source of true meta tags for the current context
 	Meta map[string]string `toml:"meta"`
+
+	// Tracks the current leaf node of the graph in the context.
+	// e.g. If in Chapter, this holds Chapter's Node ID.
+	CurrentParentID string `toml:"current_parent_id, omitempty"`
 
 	// LastBatchID acts as a flag for the `undo` command.
 	// If a log was created during the last state change, this holds its UUID

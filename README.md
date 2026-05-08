@@ -9,3 +9,6 @@ A terminal logging tool to log studying material or notes quickly and efficientl
 3. SQLITE3
 4. sqlite3-vec
 # rincewind_log
+
+# Note for Windows compilation
+This uses github.com/mattn/go-sqlite3 that expects a C compiler like `gcc` available. For windows, we might need to use `modernc.org/sqlite`

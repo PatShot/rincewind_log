@@ -12,8 +12,10 @@ import (
 
 // SessionState represents the backup for Subject and Meta before state changes
 type StateSnapshot struct {
-	Subject string            `toml:"subject"`
-	Meta    map[string]string `toml:"meta"`
+	Subject         string            `toml:"subject"`
+	SubjectID       string            `toml:"subject_id"`
+	Meta            map[string]string `toml:"meta"`
+	CurrentParentID string            `toml:"current_parent_id"`
 }
 
 // SessionManager is the orchestrator, which alongside the PersistentPreRun in the root,
@@ -48,8 +50,10 @@ func (m *SessionManager) BackupState() {
 	}
 
 	m.PreviousState = &StateSnapshot{
-		Subject: m.ActiveState.Subject,
-		Meta:    maps.Clone(m.ActiveState.Meta),
+		Subject:         m.ActiveState.Subject,
+		Meta:            maps.Clone(m.ActiveState.Meta),
+		SubjectID:       m.ActiveState.SubjectID,
+		CurrentParentID: m.ActiveState.CurrentParentID,
 	}
 }
 
@@ -69,6 +73,8 @@ func (m *SessionManager) Undo() (string, error) {
 
 	m.ActiveState.Subject = m.PreviousState.Subject
 	m.ActiveState.Meta = maps.Clone(m.PreviousState.Meta)
+	m.ActiveState.SubjectID = m.PreviousState.SubjectID
+	m.ActiveState.CurrentParentID = m.PreviousState.CurrentParentID
 
 	// Wipe LastBatchID. Do nothing, as LastBatchID provided elsewhere before action.
 	m.ActiveState.LastBatchID = ""
