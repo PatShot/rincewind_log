@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -15,12 +16,40 @@ import (
 // Global connetion pool
 var DB *sql.DB
 
-// InitDB to initialize
+func CheckDBPath(dbPath string) error {
+	// This is a problem because of course this will always throw an error.
+	var err error
+	if _, err = os.Stat(dbPath); os.IsNotExist(err) {
+		return fmt.Errorf("database not found at path : %s, run `rince init` to initialize", dbPath)
+	}
+	return err
+}
+
+// InitDB to initialize datatbase
 func InitDB(dbPath string) error {
 	var err error
 	DB, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Check conn PING
+	if err := DB.Ping(); err != nil {
+		return fmt.Errorf("DB not pinging back. :: %w", err)
+	}
+
+	// Check if rows exist in table. Then, log that the schema exists, and return nil.
+	checkSchemaQuery := `SELECT name FROM sqlite_master WHERE type='table' and name='nodes';`
+	var name string
+	err = DB.QueryRow(checkSchemaQuery).Scan(&name)
+	switch err {
+	case nil:
+		slog.Debug("Database already initialized; Skipping schema creation.", "path", dbPath)
+	case sql.ErrNoRows:
+		// table hasn't been created
+		slog.Debug("Database has no table name `nodes`. Creating schema.", "path", dbPath)
+	default:
+		err = fmt.Errorf("failed to check schema : %w", err)
 	}
 
 	// Create table if it doesn't exist
@@ -61,6 +90,7 @@ func ensureNode(tx *sql.Tx, parentID *string, nodeType, label, batchID string) (
 }
 
 // InsertNode inserts a new node into the database and returns its ID.
+// Returns SubjectID, ParentID, and Error
 func InsertNode(entries []parser.LogEntry, activeSubjectID string, activeParentID string) (string, string, error) {
 	if len(entries) == 0 {
 		return activeSubjectID, activeParentID, nil
@@ -114,12 +144,16 @@ func InsertNode(entries []parser.LogEntry, activeSubjectID string, activeParentI
 
 		// 3. Add the Leaf Node
 		noteID := uuid.New().String()
-		insertQuery := `INSERT INTO nodes (id, parent_id, batch_id, sequence, node_type, content) VALUES (?, ?, ?, ?, ?, ?, ?)`
+		insertQuery := `INSERT INTO nodes (id, parent_id, batch_id, sequence, node_type, content) VALUES (?, ?, ?, ?, ?, ?)`
+		fmt.Printf("%s, %s, %s, %s, %s", noteID, *currentParentID, entry.BatchID, entry.Sequence, entry.Content)
 		_, err = tx.Exec(insertQuery, noteID, currentParentID, entry.BatchID, entry.Sequence, entry.Type, entry.Content)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to insert note node: %w", err)
 		}
+	}
 
+	if err := tx.Commit(); err != nil {
+		return "", "", fmt.Errorf("Couldn't commit the transaction due to :: %w", err)
 	}
 	return finalSubjectID, finalParentID, nil
 }

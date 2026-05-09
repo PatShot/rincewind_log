@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/rincewind_log/internal/database"
 	"github.com/rincewind_log/internal/parser"
 	"github.com/spf13/cobra"
 )
@@ -37,15 +38,7 @@ func runLogNote(cmd *cobra.Command, args []string) {
 		activeMeta = make(map[string]string)
 	}
 
-	// Logging missing headers (Fixed: Go maps return bool, not error)
-	if _, ok := activeMeta["book"]; !ok {
-		slog.Debug("Book Header", "status", "`book` not found in Meta fields")
-	}
-	if _, ok := activeMeta["chapter"]; !ok {
-		slog.Debug("Chapter Header", "status", "`chapter` not found in Meta fields")
-	}
-
-	// 3. Initialize the Lexer state machine
+	// 3. Initialize the Lexer
 	expander := parser.NewExpander(subject, activeMeta, batchID)
 
 	// 4. Parse the raw string into structured LogEntry DAOs
@@ -57,7 +50,17 @@ func runLogNote(cmd *cobra.Command, args []string) {
 	}
 
 	// 5. Save to the database
+	// Just Debug
 	saveEntries(entries)
+	newSubjectID, newParentId, err := database.InsertNode(
+		entries,
+		ProgSession.ActiveState.SubjectID,
+		ProgSession.ActiveState.CurrentParentID,
+	)
+	if err != nil {
+		slog.Error("Failed to save to Database", "error", err)
+		return
+	}
 
 	// 6. Session Management & Undo State
 	// Back up the current state before making changes (assuming a simple struct copy works here)
@@ -66,6 +69,9 @@ func runLogNote(cmd *cobra.Command, args []string) {
 	// Track the BatchID so `rince undo` can delete all rows associated with this command execution
 	ProgSession.ActiveState.LastBatchID = batchID
 
+	ProgSession.ActiveState.SubjectID = newSubjectID
+	ProgSession.ActiveState.CurrentParentID = newParentId
+
 	// Update the active session's Meta so subsequent commands remember where we left off.
 	// If the user typed "b NewBook n Note", we want "NewBook" to persist.
 	lastEntry := entries[len(entries)-1]
@@ -73,7 +79,7 @@ func runLogNote(cmd *cobra.Command, args []string) {
 	ProgSession.ActiveState.Meta["chapter"] = lastEntry.Meta["chapter"]
 
 	// 7. Save the updated Session back to disk/db
-	err := ProgSession.Save()
+	err = ProgSession.Save()
 	if err != nil {
 		slog.Error("Failed to save session state", "error", err)
 		fmt.Println("Note saved, but session state could not be updated.")

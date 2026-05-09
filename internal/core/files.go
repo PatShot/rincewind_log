@@ -4,6 +4,7 @@ type FileStruct struct {
 	LogFile    string
 	MainFile   string
 	ConfigFile string
+	DBFile     string
 }
 
 func (f *FileStruct) GetLogFileName() string {
@@ -28,4 +29,12 @@ func (f *FileStruct) SetMainFileName(name string) {
 
 func (f *FileStruct) SetConfigFileName(name string) {
 	f.ConfigFile = name
+}
+
+func (f *FileStruct) GetDBFileName() string {
+	return f.DBFile
+}
+
+func (f *FileStruct) SetDBFileName(name string) {
+	f.DBFile = name
 }
